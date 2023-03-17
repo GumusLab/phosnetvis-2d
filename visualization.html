@@ -425,7 +425,8 @@ var gData = parseCSV(localStorage.getItem(file_names[index]))
         .graphData(gData);
 
         Graph.d3Force('collide', rectangleCollide);
-        // Graph.d3Force('charge').strength(-10);
+        Graph.d3Force('charge').strength(-70);
+        // Graph.d3Force('link').distance(link => 70);
 
 
     function nodePaint({ id, x, y }, color, ctx) {
