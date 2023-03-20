@@ -5,8 +5,8 @@
   <script src="//unpkg.com/d3-quadtree"></script>
   <script src="//unpkg.com/d3-force"></script>
   <script src="//unpkg.com/d3-bboxCollide"></script>
-  <!-- <script src="/example/custom-node-shape/collide.js"></script> -->
-  <!--<script src="../../dist/force-graph.js"></script>-->
+  <script src="js/rainbowvis.js"></script>
+
 </head>
 
 <body>
@@ -111,43 +111,107 @@ dict['ids'] = dict["nodes"].map(el => el.id)
 return dict;
 }
 
-const CAMERA_DISTANCE2NODES_FACTOR = 170;
-
 var file_names = JSON.parse(localStorage.getItem("file_names"))
 var index = localStorage.getItem("idx")
-var gData = parseCSV(localStorage.getItem(file_names[index]))
+var finalDataObj = parseCSV(localStorage.getItem(file_names[index]))
 
-    var rectangleCollide = d3.bboxCollide([[-7,-10],[7,10]])
+function thresholdDecider(DataObj){ // need to add rectangleCollide = d3.bboxCollide here
+
+let nodeSizes = (DataObj["nodes"].map(el => el.nodeSize)).filter(x => x != undefined)
+let nodeColors = ((DataObj["nodes"].map(el => el.nodeColors)).flat()).filter(x => x != undefined)
+let nodeSizeRange = [Math.min.apply(Math, nodeSizes), Math.max.apply(Math, nodeSizes)]
+let nodeColorRange = [Math.min.apply(Math, nodeColors), Math.max.apply(Math, nodeColors)]
+let nodeColorThreshold = null
+
+if (nodeColorRange[0] != undefined && nodeColorRange[1] != undefined){
+  let minPositive = 0
+  let maxPositive = 0
+  nodeColorRange[0]<0 ? minPositive = - nodeColorRange[0] : minPositive = nodeColorRange[0]
+  nodeColorRange[1]<0 ? maxPositive = - nodeColorRange[1] : maxPositive = nodeColorRange[1]
+  minPositive>maxPositive  ? nodeColorThreshold = minPositive : nodeColorThreshold = maxPositive
+}
+
+let edgeWeights = (DataObj["links"].map(el => el.edgeWeight)).filter(x => x != undefined)
+let edgeColors = (DataObj["links"].map(el => el.edgeColor)).filter(x => x != undefined)
+let edgeWeightRange = [Math.min.apply(Math, edgeWeights), Math.max.apply(Math, edgeWeights)]
+let edgeColorRange = [Math.min.apply(Math, edgeColors), Math.max.apply(Math, edgeColors)]
+
+return {"nodeSizes":nodeSizes, "nodeColors":nodeColors, "nodeSizeRange":nodeSizeRange, "nodeColorRange":nodeColorRange, "nodeColorThreshold":nodeColorThreshold, "edgeWeights":edgeWeights, "edgeColors":edgeColors, "edgeWeightRange":edgeWeightRange, "edgeColorRange":edgeColorRange}
+
+}
+
+var thresholds = thresholdDecider(finalDataObj)
+var [nodeSizes, nodeColors, nodeSizeRange, nodeColorRange, nodeColorThreshold, edgeWeights, edgeColors, edgeWeightRange, edgeColorRange] = [thresholds["nodeSizes"], thresholds["nodeColors"], thresholds["nodeSizeRange"], thresholds["nodeColorRange"], thresholds["nodeColorThreshold"], thresholds["edgeWeights"],thresholds["edgeColors"],thresholds["edgeWeightRange"],thresholds["edgeColorRange"]]
+var nodesList = finalDataObj["ids"]
+
+var rectangleCollide = d3.bboxCollide([[-7,-10],[7,10]])
 
     const Graph = ForceGraph()
       (document.getElementById('graph'))
-        // .nodeCanvasObject((node, ctx) => nodePaint(node, getColor(node.id), ctx))
-        .nodeCanvasObject((node, ctx) => {
-          const label = node.id;
 
-          ctx.fillStyle = '#0000ff';
+      .nodeCanvasObject((node, ctx) => {
+        var arrayLength = node.nodeColors.length;
+        if (arrayLength == 0 || arrayLength == undefined){
+          ctx.fillStyle = '#808080';
           ctx.fillRect(node.x - 6, node.y - 2.5, 12, 5);
-          ctx.fillStyle = '#cccccc';
-          ctx.fillRect(node.x - 6, node.y + 2.5, 12, 5);
-          ctx.fillStyle = '#ff2b2b'
-          ctx.fillRect(node.x - 6,node.y + 7.5, 12, 5);
-          
+        }
+        else{
+          arrayLength = arrayLength >= 3 ? 3 : arrayLength;
+
+        for (var i = 0; i < arrayLength; i++) {
+            ctx.fillStyle = nodeColoring(node.nodeColors[i]);
+            
+            ctx.fillRect(node.x - 6, node.y - 2.5 + i*5, 12, 5);       
+          }
+          // ctx.fillStyle = '#0000ff';
+          // ctx.fillRect(node.x - 6, node.y - 2.5, 12, 5);
+          // ctx.fillStyle = '#cccccc';
+          // ctx.fillRect(node.x - 6, node.y + 2.5, 12, 5);
+          // ctx.fillStyle = '#ff2b2b'
+          // ctx.fillRect(node.x - 6,node.y + 7.5, 12, 5);
+        }
         })
         .nodePointerAreaPaint(nodePaint)
         .nodeId('id')
         .nodeLabel('id')
-        .graphData(gData);
+        .graphData(finalDataObj);
 
         Graph.d3Force('collide', rectangleCollide);
         Graph.d3Force('charge').strength(-70);
         // Graph.d3Force('link').distance(link => 70);
 
+        function nodePaint({ id, x, y }, color, ctx) {
+          ctx.fillStyle = color
+          ctx.fillRect(x-6, y-3, 12, 18);
+         }
 
-    function nodePaint({ id, x, y }, color, ctx) {
-      ctx.fillStyle = color
-      ctx.fillRect(x-6, y-3, 12, 18);
-    }
+        function normalized(value, actual_bounds, desired_bounds) { 
+          return (desired_bounds[0] + (value - actual_bounds[0]) * (desired_bounds[1] - desired_bounds[0]) / (actual_bounds[1] - actual_bounds[0]))
+        }
 
+        function nodeColoring (l2fc_value) {
+          if(l2fc_value === "kinase"){
+            return "#f5aa3b"
+          }
+
+            if (nodeColorRange[0] != undefined && nodeColorRange[1] != undefined){
+            
+            let rainbow = new Rainbow(); 
+            nodeColorThreshold > 3 ? rainbow.setNumberRange(-3, 3) : rainbow.setNumberRange(-nodeColorThreshold, nodeColorThreshold)
+            
+            rainbow.setSpectrum('2600e6', '2A00FF', '5533FF', '7F66FF', 'AA99FF', 'D4CCFF', 'cccccc', 'FFCCDD', 'FF99BB', 'FF6699', 'FF3377', 'FF0055', 'CC0044');
+          
+            if (l2fc_value === "null") {
+              return "#cccccc"
+            }
+            else{
+              let hexColour = rainbow.colourAt(l2fc_value);
+              let stringColor = '#' + hexColour
+              return stringColor
+            }
+
+          }
+        }
 
   </script>
 </body>
